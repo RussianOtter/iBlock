@@ -28,14 +28,51 @@ Developer:
 
 """
 
-import sys, random, time
-from time import gmtime, strftime
+import sys, random, time, argparse
+parser = argparse.ArgumentParser()
+parser.add_argument("-i", "--intelligence",help="Activates dynamic machine learning mode for both players",action="store_true")
+parser.add_argument("-r", "--random",help="Activates random machine learning mode for both players",action="store_true")
+parser.add_argument("-p", "--pvai",help="Activates Player vs AI mode",action="store_true")
+parser.add_argument("-R", "--Reset",help="Activates reset mode for both players",action="store_true")
+parser.add_argument("-sm", "--show-moves",help="Shows the last move for each turn",action="store_true")
+parser.add_argument("-d", "--display",help="Set to False to disable table display",default=True)
+parser.add_argument("-pg", "--progress",help="Displays progress graphs", action="store_true")
+parser.add_argument("-t", "--time",help="Turn rate for each player",default=0.05)
+parser.add_argument("-q", "--quick",help="Plays a 1 match game", action="store_true")
+parser.add_argument("-H", "--Hide",help="Hides help",action="store_true")
+args = parser.parse_args()
 
-fresh_start1 = False
-fresh_start0 = False
+if args.pvai:
+	human_mode = True
+else:
+	human_mode = False
+if args.Reset:
+	fresh_start1,fresh_start0 = True,True
+else:
+	fresh_start0,fresh_start1 = False,False
+if args.show_moves:
+	show_move = True
+else:
+	show_move = False
+if args.progress:
+	progress_graphing = True
+else:
+	progress_graphing = False
+display = args.display
+mtime = float(args.time)
+
+if show_move:
+	from time import gmtime, strftime
+if progress_graphing:
+	"""
+	import matplotlib.pyplot as plt
+	import numpy as np
+	Still in progress
+	"""
+	pass
 
 global last_move
-last_move = "41"
+last_move = ["41"]
 
 def pull_dynamics(player):
 	p0_info = open("player_0.ib").read().split()
@@ -44,6 +81,21 @@ def pull_dynamics(player):
 		return p1_info
 	if player == "0":
 		return p0_info
+
+def table_ref():
+	print """
+       Table Reference
+==============================
+1  |2 | 3   4   5   6  |7 | 8
+9  |10| 11  12  13  14 |15| 16
+17 |18| 19  20  21  22 |23| 24
+25 |26| 27  28  29  30 |31| 32
+33 |34| 35  36  37  38 |39| 40
+41 |42| 43  44  45  46 |47| 48
+==============================
+"""
+	pass
+		
 
 table = {
 	"1":".",  "2":".",  "3":".",  "4":".",  "5":".",  "6":".",  "7":".",  "8":"0",
@@ -63,8 +115,6 @@ table = {
 # up right   = -7
 # down left  = +7
 
-display = True
-mtime = 0.05
 
 def table_reset():
 	reset = {
@@ -130,8 +180,9 @@ def move(id,space,table=table):
 	table.update({space:id})
 	last_move = space
 	table_print(table)
-	tplay = strftime("%H:%M:%S", gmtime())
-	print "[%s] Player %s moved to %s" %(tplay,id,space)
+	if show_move:
+		tplay = strftime("%H:%M:%S", gmtime())
+		print "[%s] Player %s moved to %s" %(tplay,id,space)
 	time.sleep(mtime)
 	return last_move
 
@@ -139,6 +190,8 @@ def validate_move(space,id,attempt=0):
 	if attempt == 5:
 		return True
 	if table[space] != id:
+		if space in globals()["last_move"]:
+			return False
 		return True
 	else:
 		return False
@@ -271,6 +324,13 @@ def check_for_win(dinfo0,dinfo1,real=True,table=table,push=False,fresh_start0=fr
 			table_reset()
 			return True,"1"
 
+def last_go(last):
+	globals()["last_move"].append(last)
+	if len(last_move) > 2:
+		globals()["last_move"].reverse()
+		globals()["last_move"].pop(1)
+		globals()["last_move"].reverse()
+
 def iblock(real=False,dynamic=False):
 	push = True
 	dyn0,dyn1 = [],[]
@@ -299,25 +359,40 @@ def iblock(real=False,dynamic=False):
 					p0w += 1
 				dyn = pull_dynamics(check[1])
 				if check[1] == "0":
-					dyn0 = dynamic_update(dyn,dyn1,"0")
+					dyn0 = dynamic_update(dyn,dyn0,"0")
 				if check[1] == "1":
-					dyn0 = dynamic_update(dyn,dyn1,"1")
-			
+					dyn1 = dynamic_update(dyn,dyn1,"1")
+				
 			go_move,block = None,None
 			if _ == "0":
 				av = available_moves(_)
+				try:
+					if type(av) == tuple:
+						av = list(av)
+					for lm in last_move:
+						av.pop(av.index(lm))
+				except:
+					pass
 				for md in dyn0:
 					if md in av:
 						go_move = md
 			if _ == "1":
 				av = available_moves(_)
+				try:
+					if type(av) == tuple:
+						av = list(av)
+					for lm in last_move:
+						av.pop(av.index(lm))
+				except:
+					pass
 				for md in dyn1:
 					if md in av:
 						go_move = md
+			
 			if go_move == None:
 				block = True
 			
-			attempt = 0
+			attempt = -1
 			while 1:
 				attempt += 1
 				try:
@@ -325,15 +400,104 @@ def iblock(real=False,dynamic=False):
 						c = go_move
 					else:
 						c = random.choice(available_moves(_))
-					if validate_move(c,_,attempt):
-						break
-					if attempt > 6:
+					if attempt > 2:
 						c = random.choice(available_moves(_))
+					if validate_move(c,_,attempt) == True:
 						break
 				except Exception as e:
 					print e
-					block = random.choice(my_blocks(_))
-			last_move = move(_,c)
+					c = random.choice(available_moves(_))
+			last_go(move(_,c))
+
+def iblockgo(real=False,dynamic=False):
+	push = True
+	dyn0,dyn1 = [],[]
+	p0w,p1w = 0,0
+	while 1:
+		for _ in "1","0":
+			dyn0 = my_blocks("0")
+			dyn1 = my_blocks("1")
+			
+			if p0w == 5:
+				check = check_for_win(dyn0,dyn1, real=real,push=True)
+				p0w = 0
+			if p1w == 5:
+				check = check_for_win(dyn0,dyn1, real=real,push=True)
+				p1w = 0
+			if p0w < 5 and p1w < 5:
+				check = check_for_win(dyn0,dyn1, real=real,push=push)
+			
+			if "None" in str(type(check)):
+				check = [dynamic,_]
+			
+			if check[0]:
+				if check[1] == "1":
+					p1w += 1
+				if check[1] == "0":
+					p0w += 1
+				dyn = pull_dynamics(check[1])
+				if check[1] == "0":
+					dyn0 = dynamic_update(dyn,dyn0,"0")
+				if check[1] == "1":
+					dyn1 = dynamic_update(dyn,dyn1,"1")
+				
+			go_move,block = None,None
+			if _ == "0":
+				av = available_moves(_)
+				try:
+					if type(av) == tuple:
+						av = list(av)
+					for lm in last_move:
+						av.pop(av.index(lm))
+				except:
+					pass
+				for md in dyn0:
+					if md in av:
+						go_move = md
+			if _ == "1":
+				av = available_moves(_)
+				try:
+					if type(av) == tuple:
+						av = list(av)
+					for lm in last_move:
+						av.pop(av.index(lm))
+				except:
+					pass
+				for md in dyn1:
+					if md in av:
+						go_move = md
+			
+			if go_move == None:
+				block = True
+			
+			if _ == "1":
+				table_ref()
+				print "Available Moves:"
+				for av in available_moves(_):
+					print av,
+				print
+				while 1:
+					go_move = raw_input("iBlock ~ ")
+					if go_move in available_moves(_) and validate_move(go_move,_):
+						last_go(move(_,go_move))
+						break
+			else:
+				attempt = -1
+				while 1:
+					attempt += 1
+					try:
+						if block == None:
+							c = go_move
+						else:
+							c = random.choice(available_moves(_))
+						if attempt > 2:
+							c = random.choice(available_moves(_))
+						if validate_move(c,_,attempt) == True:
+							break
+					except Exception as e:
+						print e
+						c = random.choice(available_moves(_))
+				last_go(move(_,c))
 
 def reset_knowldge():
 	"""
@@ -345,20 +509,19 @@ def reset_knowldge():
 	if not fresh_start0 or not fresh_start1:
 		print "You must change values: \"fresh_start0\" and \"fresh_start1\" to True before reseting."
 		print "Be sure to change those values back to False while not in reset mode."
-		sys.exit()
+		time.sleep(3)
 		
 	if mtime > 0.0009 or display == True:
 		print "Consider Temporarily Changing You Game Settings For Reset:"
 		print "-Speed should be less than 0.0009"
 		print "-Display should be turned off"
-		time.sleep(5)
-	iblock(True,False)
-	iblock(True,False)
-	iblock(True,False)
-	iblock(True,False)
-	iblock(True,False)
+		time.sleep(3)
+	try:
+		iblock(False,False)
+	except:
+		pass
 	print "Reset Complete!"
-	time.sleep(2)
+	time.sleep(1)
 
 def random_ai_mode():
 	"""
@@ -366,14 +529,17 @@ def random_ai_mode():
 	(Personally this is more entiretaining than Intelligence Mode)
 	"""
 	print "Starting Random AI Mode..."
-	if mtime < 0.005:
-		print "Consider changing the frame rate to more than 0.005 while in random mode"
+	if mtime < 0.05:
+		print "Consider changing the frame rate to more than 0.05 while in random mode"
 		time.sleep(3)
 	if display == False:
 		print "Consider changing display to True inorder to view the game in random mode"
 		time.sleep(3)
 	time.sleep(1)
-	iblock(False,False)
+	try:
+		iblock(False,False)
+	except:
+		print "Game Paused"
 
 def intelligence_mode():
 	if mtime < 0.005:
@@ -384,11 +550,13 @@ def intelligence_mode():
 		time.sleep(3)
 	"""
 	This mode activates the intelligence factor of the machine learning program and tells it to improve based on it's last victories!
-	(Warning: This mode can be boring to watch because the matches end very fast due to the machine learning program having an extremely high learning rate)
 	"""
 	print "Starting Intelligence Mode..."
 	time.sleep(1)
-	iblock(False,True)
+	try:
+		iblock(False,True)
+	except:
+		print "Game Paused"
 
 def intelligent_1v1():
 	"""
@@ -402,7 +570,10 @@ def intelligent_1v1():
 		print "Consider changing display to True inorder to view the game in intelligence mode"
 		time.sleep(3)
 	time.sleep(1)
-	iblock(True,True)
+	try:
+		iblock(True,True)
+	except:
+		print "Game Paused"
 
 def human_vs_iblock():
 	"""
@@ -410,14 +581,41 @@ def human_vs_iblock():
 	"""
 	# Coming Soon #
 
-if len(sys.argv) > 1:
-	pass
-else:
+if not args.Hide:
+	print """
+ _ _____ _         _   
+|_| __  | |___ ___| |_ 
+| | __ -| | . |  _| '_|
+|_|_____|_|___|___|_,_|
+"""
+	parser.print_help()
+	print
 	print "Available Game Modes/Options:"
 	print "-Random Mode"
 	print "-Intelligence Mode"
-	print "-Quick Mode"
-	print "-Reset Option"
-	print "(Scroll down to buttom of code to see game mode function names)"
-	print "Set arguments to \"-h\" to disable this message."
-	time.sleep(2)
+	print "-1 Match Intelligence Mode"
+	print "-Reset Mode"
+	print "-Human vs Player Mode"
+	print "\n(Enter the function name for the gamemode you want in the python terminal or set your arguments to choose your gamemode)\n"
+	print "Set arguments to \"-H\" to disable this message."
+	time.sleep(0.5)
+
+if len(sys.argv) > 1:
+	if args.intelligence:
+		intelligence_mode()
+		sys.exit()
+	if args.random:
+		random_ai_mode()
+		sys.exit()
+	if args.Reset:
+		print "Stop the program once both player's fitness is at your desired stat"
+		reset_knowldge()
+		sys.exit()
+	if args.quick:
+		intelligent_1v1()
+		sys.exit()
+	if human_mode:
+		try:
+			iblockgo()
+		except:
+			print "Game Paused/Stopped"
