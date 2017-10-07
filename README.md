@@ -9,9 +9,9 @@ Rather then focusing on attacking, these AI naturally plays offensively! You wil
 
 iBlock has multiple different game options for how to set up the way the AI will play! New gamemodes coming soon!
 
-Copyright (c) SavSec 2017
+**Copyright (c) SavSec 2017**
 
-Copyright (c) SavSec iBlock 2017
+**Copyright (c) SavSec iBlock 2017**
 
 Format:
 
@@ -21,7 +21,10 @@ Format:
 
 Modules:
 
-	sys, time, random
+	sys, time, random, argparse
+	
+	optional: matplotlib, numpy
+	
 
 License:
 	
